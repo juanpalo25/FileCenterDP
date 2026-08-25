@@ -1,0 +1,26 @@
+# Entorno virtual
+.venv/
+
+# Base de datos (contiene usuarios y solicitudes reales una vez en uso)
+db/*.db
+db/*.sqlite3
+
+# Datos maestros reales del negocio (costos, precios, presupuestos de proveedores)
+MaestroDP.xlsx
+MaestroPMC.xlsx
+
+# Ejemplos con datos reales de pedidos (SKU, costos, cantidades reales)
+Ejemplos/
+
+# Python
+__pycache__/
+*.pyc
+
+# Sistema
+.DS_Store
+Thumbs.db
+~$*.docx
+~$*.xlsx
+
+# Brief original del proyecto (contiene contexto interno del negocio, no es código)
+Plantilla_Proyecto_FileCenterDP.docx
