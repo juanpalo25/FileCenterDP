@@ -3,10 +3,10 @@ from pathlib import Path
 ROOT_DIR = Path(__file__).resolve().parent.parent
 DB_PATH = ROOT_DIR / "db" / "filecenterdp.db"
 MAESTRO_DP_PATH = ROOT_DIR / "MaestroDP.xlsx"
-MAESTRO_PMC_PATH = ROOT_DIR / "MaestroPMC.xlsx"
 
 TIPOS_SOLICITUD = ["ODC", "ODR", "CDP", "FDP"]
 PRIORIDADES = ["alta", "media", "baja"]
+ORDEN_PRIORIDAD = {"alta": 0, "media": 1, "baja": 2}
 ROLES = ["analista", "asistente", "administrador"]
 
 ESTADO_PENDIENTE = "Cargado (pendiente)"

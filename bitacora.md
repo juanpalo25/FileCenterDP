@@ -1,5 +1,21 @@
 # Bitácora del proyecto FileCenterDP
 
+## 2026-08-27 — Mejoras a partir del uso real
+
+Ajustes pedidos por el usuario tras empezar a usar el MVP:
+
+- **ODC por marca**: la plantilla de ODC ahora incluye columna `Marca`; al cargar, el sistema agrupa los ítems por marca y crea una solicitud independiente por cada una (con su propio número correlativo), en vez de una sola solicitud multi-marca.
+- **Alerta de costo no bloqueante**: el cruce Costo_actualizado vs MaestroDP ahora se hace directo al confirmar la carga (se sacó el botón separado de "Previsualizar diferencias") y solo muestra una leyenda con los SKU afectados — nunca impide guardar la solicitud.
+- **SKU sin separador de miles**: en todas las tablas de previsualización de ítems.
+- **PMC eliminado por completo**: se sacó la generación de `PMC.xlsx` en la descarga de ODC, el loader de MaestroPMC en Administración, la lectura de `MaestroPMC.xlsx` y las tablas relacionadas en la base. ODC ahora descarga solo su `.prn`.
+- **Descarga Masiva**: nuevo botón en "Pendientes / Descargar" que arma un solo `.zip` con el archivo de cada solicitud pendiente.
+- **Orden por prioridad**: la lista de pendientes ordena primero las de prioridad alta.
+- **Detalle de ODC ampliado**: la tabla de previsualización de una solicitud ODC pendiente ahora muestra ID local, SKU, Cantidad, Costo Actualizado (formato `11.430,23`), Costo en sistema y PVP (ambos consultados en vivo contra MaestroDP, no el valor guardado al cargar) y DIF vs Maestro (Costo en sistema − Costo Actualizado, en rojo si es negativo y verde si es positivo).
+
+No incluido en esta ronda: filtrar el Comitente de ODC/ODR por si opera en COMPRA o CONSIGNA — se revisó MaestroDP a fondo y esa clasificación no está en ninguna columna del maestro; el usuario decidió omitirlo por ahora.
+
+Ver el detalle técnico actualizado en [docs/DOCUMENTACION.md](docs/DOCUMENTACION.md). Cambios verificados con pruebas de los módulos (`solicitudes`, `generators`, `db`, formateo de `views_asistente`) y en la app corriendo en el navegador, usando una copia de trabajo de la base real y limpiando los registros de prueba al terminar.
+
 ## 2026-08-24 — Inicio y build del MVP local
 
 Se relevó el brief (`Plantilla_Proyecto_FileCenterDP.docx`), los archivos maestros (`MaestroDP.xlsx`, `MaestroPMC.xlsx`) y los ejemplos reales de `Ejemplos/`. Se descartó usar la base Postgres del proyecto de Reposición como fuente de datos: se confirmó que los maestros siguen siendo Excel en la carpeta raíz.

@@ -13,7 +13,7 @@ class PlantillaInvalida(Exception):
 
 
 _COLUMNAS_REQUERIDAS = {
-    "ODC": ["SKU", "Cantidad", "Costo_actualizado"],
+    "ODC": ["Marca", "SKU", "Cantidad", "Costo_actualizado"],
     "ODR": ["SKU", "Cantidad"],
     "CDP": ["SKU", "PVP", "Costo"],
 }
@@ -54,10 +54,14 @@ def parsear_plantilla(tipo: str, archivo_bytes: bytes) -> list[dict]:
 
         item = {"sku": sku}
         if tipo == "ODC":
+            marca = row[idx["Marca"]]
             cantidad = row[idx["Cantidad"]]
             costo_actualizado = row[idx["Costo_actualizado"]]
+            if marca is None or str(marca).strip() == "":
+                raise PlantillaInvalida(f"Falta Marca para el SKU {sku}")
             if cantidad is None:
                 raise PlantillaInvalida(f"Falta Cantidad para el SKU {sku}")
+            item["marca"] = str(marca).strip()
             item["cantidad"] = cantidad
             item["costo_actualizado"] = costo_actualizado
         elif tipo == "ODR":
@@ -76,6 +80,15 @@ def parsear_plantilla(tipo: str, archivo_bytes: bytes) -> list[dict]:
     if not items:
         raise PlantillaInvalida("La plantilla no tiene ningún renglón cargado.")
     return items
+
+
+def agrupar_por_marca(items: list[dict]) -> dict[str, list[dict]]:
+    """Solo para ODC: agrupa los items por marca, preservando el orden de aparición
+    tanto de las marcas como de los items dentro de cada una."""
+    grupos: dict[str, list[dict]] = {}
+    for item in items:
+        grupos.setdefault(item["marca"], []).append(item)
+    return grupos
 
 
 def detectar_diferencias_costo(items: list[dict]) -> list[dict]:
@@ -107,18 +120,20 @@ def crear_solicitud(
     items: list[dict],
     creado_por: str,
     fecha_vigencia: str | None = None,
+    marca: str | None = None,
 ) -> int:
     ahora = datetime.now().isoformat(timespec="seconds")
     with get_conn() as conn:
         cur = conn.execute(
             """INSERT INTO solicitudes
-               (tipo, comitente, rubro, prioridad, fecha_vigencia, estado, fecha_creacion,
+               (tipo, comitente, rubro, marca, prioridad, fecha_vigencia, estado, fecha_creacion,
                 archivo_origen_nombre, archivo_origen_datos, creado_por)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
             (
                 tipo,
                 comitente,
                 rubro,
+                marca,
                 prioridad,
                 fecha_vigencia,
                 ESTADO_PENDIENTE,

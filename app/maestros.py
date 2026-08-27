@@ -2,7 +2,7 @@ from datetime import datetime
 
 import openpyxl
 
-from config import MAESTRO_DP_PATH, MAESTRO_PMC_PATH
+from config import MAESTRO_DP_PATH
 from db import get_conn
 
 
@@ -60,57 +60,6 @@ def cargar_maestro_dp() -> int:
     return len(filas)
 
 
-def cargar_maestro_pmc() -> int:
-    """Lee MaestroPMC.xlsx y reemplaza el cache en SQLite. Devuelve la cantidad de filas cargadas."""
-    wb = openpyxl.load_workbook(MAESTRO_PMC_PATH, data_only=True, read_only=True)
-    ws = wb.worksheets[0]
-
-    filas = []
-    for row in ws.iter_rows(min_row=2, values_only=True):
-        (
-            fecha_pedido,
-            responsable,
-            rubro,
-            proveedor,
-            producto_marca,
-            condicion_pago,
-            valor_anticipado,
-            importe,
-        ) = row[:8]
-        if proveedor is None:
-            continue
-        fecha_str = fecha_pedido.isoformat() if hasattr(fecha_pedido, "isoformat") else fecha_pedido
-        filas.append(
-            (
-                fecha_str,
-                responsable,
-                rubro,
-                proveedor,
-                producto_marca,
-                condicion_pago,
-                valor_anticipado,
-                _to_float(importe),
-            )
-        )
-    wb.close()
-
-    with get_conn() as conn:
-        conn.execute("DELETE FROM maestro_pmc_cache")
-        conn.executemany(
-            """INSERT INTO maestro_pmc_cache
-               (fecha_pedido, responsable_categoria, rubro, proveedor, producto_marca,
-                condicion_pago, valor_anticipado, importe)
-               VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
-            filas,
-        )
-        conn.execute(
-            """INSERT INTO maestros_meta (nombre, ultima_carga, filas) VALUES ('MaestroPMC', ?, ?)
-               ON CONFLICT(nombre) DO UPDATE SET ultima_carga = excluded.ultima_carga, filas = excluded.filas""",
-            (datetime.now().isoformat(timespec="seconds"), len(filas)),
-        )
-    return len(filas)
-
-
 def estado_maestros():
     with get_conn() as conn:
         rows = conn.execute("SELECT nombre, ultima_carga, filas FROM maestros_meta").fetchall()
@@ -137,18 +86,5 @@ def buscar_producto_por_sku(sku: int):
     with get_conn() as conn:
         row = conn.execute(
             "SELECT * FROM maestro_dp_cache WHERE sku = ?", (sku,)
-        ).fetchone()
-    return dict(row) if row else None
-
-
-def ultimo_pedido_pmc(comitente: str):
-    """Trae el pedido de PMC más reciente para un comitente (por nombre de proveedor)."""
-    with get_conn() as conn:
-        row = conn.execute(
-            """SELECT * FROM maestro_pmc_cache
-               WHERE UPPER(TRIM(proveedor)) = UPPER(TRIM(?))
-               ORDER BY fecha_pedido DESC
-               LIMIT 1""",
-            (comitente,),
         ).fetchone()
     return dict(row) if row else None

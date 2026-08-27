@@ -3,10 +3,6 @@ import re
 import zipfile
 from datetime import date
 
-import openpyxl
-
-from maestros import buscar_producto_por_sku, ultimo_pedido_pmc
-
 _INVALID_FILENAME_CHARS = re.compile(r'[\\/:*?"<>|]')
 
 
@@ -54,54 +50,6 @@ def generar_cdp_prn(items: list[dict]) -> bytes:
     return contenido.encode("latin-1")
 
 
-def generar_pmc_xlsx(comitente: str, items: list[dict]) -> bytes:
-    """items: [{'sku': int, 'cantidad': number, 'costo_actualizado': number}, ...].
-    Cruza MaestroPMC (condiciones del último pedido del comitente) y MaestroDP (marcas de los SKUs)."""
-    ultimo_pedido = ultimo_pedido_pmc(comitente) or {}
-
-    marcas = []
-    for it in items:
-        producto = buscar_producto_por_sku(it["sku"])
-        marca = producto["marca"] if producto else None
-        if marca and marca not in marcas:
-            marcas.append(marca)
-    producto_marca = " - ".join(marcas) if marcas else ""
-
-    importe = sum((it["cantidad"] or 0) * (it["costo_actualizado"] or 0) for it in items)
-
-    wb = openpyxl.Workbook()
-    ws = wb.active
-    ws.title = "Hoja1"
-    ws.append(
-        [
-            "Fecha Pedido Presupuesto",
-            "Responsable Categoria",
-            "Rubro",
-            "Proveedor",
-            "Producto/Marca",
-            "Condición de Pago",
-            "Se Entrega Valor Anticipado? En cuantos Días?",
-            "Importe",
-        ]
-    )
-    ws.append(
-        [
-            date.today().strftime("%d-%m-%Y"),
-            ultimo_pedido.get("responsable_categoria"),
-            ultimo_pedido.get("rubro"),
-            comitente,
-            producto_marca,
-            ultimo_pedido.get("condicion_pago"),
-            ultimo_pedido.get("valor_anticipado"),
-            importe,
-        ]
-    )
-
-    buffer = io.BytesIO()
-    wb.save(buffer)
-    return buffer.getvalue()
-
-
 def generar_fdp_output(archivo_original: bytes) -> bytes:
     """FDP se entrega tal cual lo subió el analista, solo se renombra al descargar."""
     return archivo_original
@@ -111,9 +59,8 @@ def _extension_original(nombre_archivo_original: str) -> str:
     return nombre_archivo_original.rsplit(".", 1)[-1] if "." in nombre_archivo_original else "xlsx"
 
 
-def construir_paquete_descarga(solicitud: dict) -> tuple[bytes, str]:
-    """Genera el/los archivo(s) de salida de una solicitud y los empaqueta en un .zip
-    para que el asistente los descargue con un solo botón."""
+def generar_archivos_solicitud(solicitud: dict) -> list[tuple[str, bytes]]:
+    """Genera el/los archivo(s) de salida de una solicitud (nombre, contenido)."""
     tipo = solicitud["tipo"]
     comitente = solicitud["comitente"]
     solicitud_id = solicitud["id"]
@@ -122,14 +69,6 @@ def construir_paquete_descarga(solicitud: dict) -> tuple[bytes, str]:
     archivos: list[tuple[str, bytes]] = []
 
     if tipo == "ODC":
-        pmc_items = [
-            {"sku": it["sku"], "cantidad": it["cantidad"], "costo_actualizado": it["costo_actualizado"]}
-            for it in items
-        ]
-        pmc_bytes = generar_pmc_xlsx(comitente, pmc_items)
-        pmc_nombre = nombre_archivo("PMC", comitente, solicitud_id, "xlsx")
-        archivos.append((pmc_nombre, pmc_bytes))
-
         odc_items = [{"sku": it["sku"], "cantidad": it["cantidad"]} for it in items]
         odc_bytes = generar_odc_odr_prn(odc_items)
         odc_nombre = nombre_archivo("ODC", comitente, solicitud_id, "prn")
@@ -153,10 +92,30 @@ def construir_paquete_descarga(solicitud: dict) -> tuple[bytes, str]:
         fdp_nombre = nombre_archivo("FDP", comitente, solicitud_id, ext)
         archivos.append((fdp_nombre, fdp_bytes))
 
+    return archivos
+
+
+def construir_paquete_descarga(solicitud: dict) -> tuple[bytes, str]:
+    """Empaqueta el/los archivo(s) de salida de una solicitud en un .zip
+    para que el asistente los descargue con un solo botón."""
+    archivos = generar_archivos_solicitud(solicitud)
+
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
         for nombre, contenido in archivos:
             zf.writestr(nombre, contenido)
 
-    zip_nombre = nombre_archivo(tipo, comitente, solicitud_id, "zip")
+    zip_nombre = nombre_archivo(solicitud["tipo"], solicitud["comitente"], solicitud["id"], "zip")
     return buffer.getvalue(), zip_nombre
+
+
+def construir_paquete_descarga_masiva(solicitudes: list[dict]) -> bytes:
+    """Empaqueta en un solo .zip los archivos de salida de varias solicitudes
+    (una entrada por cada archivo individual, con el mismo nombre que tendría
+    si se descargara solicitud por solicitud)."""
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as zf:
+        for solicitud in solicitudes:
+            for nombre, contenido in generar_archivos_solicitud(solicitud):
+                zf.writestr(nombre, contenido)
+    return buffer.getvalue()

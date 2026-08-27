@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS solicitudes (
     tipo TEXT NOT NULL CHECK(tipo IN ('ODC','ODR','CDP','FDP')),
     comitente TEXT NOT NULL,
     rubro TEXT,
+    marca TEXT,
     prioridad TEXT NOT NULL CHECK(prioridad IN ('alta','media','baja')),
     fecha_vigencia TEXT,
     estado TEXT NOT NULL,
@@ -61,18 +62,6 @@ CREATE TABLE IF NOT EXISTS maestro_dp_cache (
     cod_srub TEXT
 );
 
-CREATE TABLE IF NOT EXISTS maestro_pmc_cache (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    fecha_pedido TEXT,
-    responsable_categoria TEXT,
-    rubro TEXT,
-    proveedor TEXT,
-    producto_marca TEXT,
-    condicion_pago TEXT,
-    valor_anticipado TEXT,
-    importe NUMERIC
-);
-
 CREATE TABLE IF NOT EXISTS maestros_meta (
     nombre TEXT PRIMARY KEY,
     ultima_carga TEXT,
@@ -85,6 +74,9 @@ def init_db():
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     with get_conn() as conn:
         conn.executescript(SCHEMA)
+        columnas = {row["name"] for row in conn.execute("PRAGMA table_info(solicitudes)")}
+        if "marca" not in columnas:
+            conn.execute("ALTER TABLE solicitudes ADD COLUMN marca TEXT")
 
 
 @contextmanager

@@ -1,14 +1,14 @@
 import streamlit as st
 
 from auth import crear_usuario, eliminar_usuario, listar_usuarios
-from config import MAESTRO_DP_PATH, MAESTRO_PMC_PATH, ROLES
-from maestros import cargar_maestro_dp, cargar_maestro_pmc, estado_maestros
+from config import MAESTRO_DP_PATH, ROLES
+from maestros import cargar_maestro_dp, estado_maestros
 
 
 def render(usuario: dict):
     st.header("Administración")
 
-    tab_usuarios, tab_maestros = st.tabs(["Usuarios", "Maestros (MaestroDP / MaestroPMC)"])
+    tab_usuarios, tab_maestros = st.tabs(["Usuarios", "Maestros (MaestroDP)"])
 
     with tab_usuarios:
         st.subheader("Crear usuario")
@@ -43,29 +43,15 @@ def render(usuario: dict):
 
     with tab_maestros:
         st.write(f"Ruta MaestroDP: `{MAESTRO_DP_PATH}`")
-        st.write(f"Ruta MaestroPMC: `{MAESTRO_PMC_PATH}`")
 
         estado = estado_maestros()
-        col1, col2 = st.columns(2)
-        with col1:
-            meta = estado.get("MaestroDP")
-            st.metric("MaestroDP - filas cargadas", meta["filas"] if meta else 0)
-            st.caption(f"Última carga: {meta['ultima_carga'] if meta else 'nunca'}")
-            if st.button("Actualizar MaestroDP"):
-                try:
-                    n = cargar_maestro_dp()
-                    st.success(f"MaestroDP actualizado: {n} filas.")
-                    st.rerun()
-                except FileNotFoundError:
-                    st.error(f"No se encontró el archivo en {MAESTRO_DP_PATH}")
-        with col2:
-            meta = estado.get("MaestroPMC")
-            st.metric("MaestroPMC - filas cargadas", meta["filas"] if meta else 0)
-            st.caption(f"Última carga: {meta['ultima_carga'] if meta else 'nunca'}")
-            if st.button("Actualizar MaestroPMC"):
-                try:
-                    n = cargar_maestro_pmc()
-                    st.success(f"MaestroPMC actualizado: {n} filas.")
-                    st.rerun()
-                except FileNotFoundError:
-                    st.error(f"No se encontró el archivo en {MAESTRO_PMC_PATH}")
+        meta = estado.get("MaestroDP")
+        st.metric("MaestroDP - filas cargadas", meta["filas"] if meta else 0)
+        st.caption(f"Última carga: {meta['ultima_carga'] if meta else 'nunca'}")
+        if st.button("Actualizar MaestroDP"):
+            try:
+                n = cargar_maestro_dp()
+                st.success(f"MaestroDP actualizado: {n} filas.")
+                st.rerun()
+            except FileNotFoundError:
+                st.error(f"No se encontró el archivo en {MAESTRO_DP_PATH}")
