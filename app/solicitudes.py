@@ -3,7 +3,7 @@ from datetime import date, datetime
 
 import openpyxl
 
-from config import ESTADO_PENDIENTE, ESTADO_FINAL_POR_TIPO
+from config import ESTADO_PENDIENTE, ESTADO_FINAL_POR_TIPO, UMBRAL_DIFERENCIA_COSTO
 from db import get_conn
 from maestros import buscar_producto_por_sku
 
@@ -57,11 +57,9 @@ def parsear_plantilla(tipo: str, archivo_bytes: bytes) -> list[dict]:
             marca = row[idx["Marca"]]
             cantidad = row[idx["Cantidad"]]
             costo_actualizado = row[idx["Costo_actualizado"]]
-            if marca is None or str(marca).strip() == "":
-                raise PlantillaInvalida(f"Falta Marca para el SKU {sku}")
             if cantidad is None:
                 raise PlantillaInvalida(f"Falta Cantidad para el SKU {sku}")
-            item["marca"] = str(marca).strip()
+            item["marca"] = str(marca).strip() if marca is not None and str(marca).strip() != "" else None
             item["cantidad"] = cantidad
             item["costo_actualizado"] = costo_actualizado
         elif tipo == "ODR":
@@ -82,12 +80,14 @@ def parsear_plantilla(tipo: str, archivo_bytes: bytes) -> list[dict]:
     return items
 
 
-def agrupar_por_marca(items: list[dict]) -> dict[str, list[dict]]:
+def agrupar_por_marca(items: list[dict], comitente: str) -> dict[str, list[dict]]:
     """Solo para ODC: agrupa los items por marca, preservando el orden de aparición
-    tanto de las marcas como de los items dentro de cada una."""
+    tanto de las marcas como de los items dentro de cada una. Los items sin marca
+    se agrupan bajo el nombre del comitente."""
     grupos: dict[str, list[dict]] = {}
     for item in items:
-        grupos.setdefault(item["marca"], []).append(item)
+        clave = item["marca"] or comitente
+        grupos.setdefault(clave, []).append(item)
     return grupos
 
 
@@ -99,7 +99,11 @@ def detectar_diferencias_costo(items: list[dict]) -> list[dict]:
         costo_maestro = producto["costo_ppal"] if producto else None
         item["costo_maestro"] = costo_maestro
         costo_actualizado = item.get("costo_actualizado")
-        if costo_maestro is not None and costo_actualizado is not None and float(costo_maestro) != float(costo_actualizado):
+        if (
+            costo_maestro is not None
+            and costo_actualizado is not None
+            and abs(float(costo_maestro) - float(costo_actualizado)) >= UMBRAL_DIFERENCIA_COSTO
+        ):
             diferencias.append(
                 {
                     "sku": item["sku"],

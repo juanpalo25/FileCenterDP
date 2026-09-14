@@ -2,13 +2,14 @@ import streamlit as st
 
 from auth import crear_usuario, eliminar_usuario, listar_usuarios
 from config import MAESTRO_DP_PATH, ROLES
-from maestros import cargar_maestro_dp, estado_maestros
+from maestros import cargar_maestro_dp, estado_maestros, listar_rubros
+from presupuestos import establecer_presupuesto, obtener_presupuestos, periodo_actual, periodos_disponibles
 
 
 def render(usuario: dict):
     st.header("Administración")
 
-    tab_usuarios, tab_maestros = st.tabs(["Usuarios", "Maestros (MaestroDP)"])
+    tab_usuarios, tab_maestros, tab_pmc = st.tabs(["Usuarios", "Maestros (MaestroDP)", "PMC"])
 
     with tab_usuarios:
         st.subheader("Crear usuario")
@@ -55,3 +56,36 @@ def render(usuario: dict):
                 st.rerun()
             except FileNotFoundError:
                 st.error(f"No se encontró el archivo en {MAESTRO_DP_PATH}")
+
+    with tab_pmc:
+        st.subheader("Presupuesto mensual por rubro")
+        rubros = listar_rubros()
+        if not rubros:
+            st.warning(
+                "Todavía no hay rubros cargados. Actualizá MaestroDP antes de cargar presupuestos."
+            )
+        else:
+            periodos = periodos_disponibles()
+            periodo = st.selectbox("Mes", periodos, index=periodos.index(periodo_actual()))
+            st.caption(
+                "El presupuesto de cada rubro se puede modificar en cualquier momento "
+                "(por ejemplo, para corregirlo a mano si se anula una ODC)."
+            )
+            asignados = obtener_presupuestos(periodo)
+            with st.form(f"form_pmc_{periodo}"):
+                montos = {}
+                for rubro in rubros:
+                    montos[rubro] = st.number_input(
+                        f"Rubro {rubro}",
+                        min_value=0.0,
+                        value=float(asignados.get(rubro) or 0),
+                        step=1000.0,
+                        format="%.2f",
+                        key=f"pmc_{periodo}_{rubro}",
+                    )
+                enviado = st.form_submit_button("Guardar presupuestos")
+            if enviado:
+                for rubro, monto in montos.items():
+                    establecer_presupuesto(rubro, periodo, monto, usuario["usuario"])
+                st.success(f"Presupuestos de {periodo} actualizados.")
+                st.rerun()

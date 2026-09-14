@@ -1,13 +1,57 @@
+import pandas as pd
 import streamlit as st
 
 from config import ESTADO_APLICADO, ESTADO_EMITIDO, ESTADO_PENDIENTE, PRIORIDADES, TIPOS_SOLICITUD
 from generators import format_solicitud_id
 from maestros import listar_comitentes, listar_rubros
+from presupuestos import periodo_actual, periodos_disponibles, resumen_pmc
 from solicitudes import listar_solicitudes, obtener_solicitud
+
+
+def _formato_arg(valor) -> str:
+    """Formatea un número en estilo argentino: punto de miles, coma decimal."""
+    if valor is None:
+        return "—"
+    texto = f"{float(valor):,.2f}"
+    return texto.replace(",", "X").replace(".", ",").replace("X", ".")
+
+
+def _color_saldo(valor) -> str:
+    return "color: #c62828" if valor is not None and valor < 0 else ""
+
+
+def _seccion_pmc():
+    st.subheader("Presupuesto PMC")
+    periodos = periodos_disponibles()
+    periodo = st.selectbox("Mes", periodos, index=periodos.index(periodo_actual()), key="periodo_pmc_dashboard")
+    resumen = resumen_pmc(periodo)
+    if not resumen:
+        st.info("Todavía no hay rubros cargados en MaestroDP.")
+        return
+    df = pd.DataFrame(
+        [
+            {
+                "Rubro": r["rubro"],
+                "Presupuesto": r["presupuesto"],
+                "Consumido (ODC emitidas)": r["consumido"],
+                "Saldo": r["saldo"],
+            }
+            for r in resumen
+        ]
+    )
+    st.dataframe(
+        df.style.format(
+            {"Presupuesto": _formato_arg, "Consumido (ODC emitidas)": _formato_arg, "Saldo": _formato_arg}
+        ).map(_color_saldo, subset=["Saldo"]),
+        use_container_width=True,
+    )
 
 
 def render(usuario: dict):
     st.header("Dashboard de solicitudes")
+
+    _seccion_pmc()
+    st.divider()
 
     col1, col2, col3, col4, col5 = st.columns(5)
     tipo = col1.selectbox("Tipo", ["(todos)"] + TIPOS_SOLICITUD)

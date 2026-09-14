@@ -38,13 +38,16 @@ def render(usuario: dict):
         fecha_vigencia = st.date_input("Fecha de vigencia", value=date.today())
 
     ayuda_plantilla = {
-        "ODC": "Columnas requeridas: Marca, SKU, Cantidad, Costo_actualizado",
+        "ODC": "Columnas requeridas: SKU, Cantidad, Costo_actualizado (Marca es opcional)",
         "ODR": "Columnas requeridas: SKU, Cantidad",
         "CDP": "Columnas requeridas: SKU, PVP, Costo",
         "FDP": "Subí la ficha de producto tal como la vas a pedir que se cargue.",
     }[tipo]
     if tipo == "ODC":
-        st.caption("Si la plantilla trae varias marcas, se crea una solicitud por cada una.")
+        st.caption(
+            "Si la plantilla trae varias marcas, se crea una solicitud por cada una. "
+            "Los renglones sin marca se agrupan en una solicitud aparte a nombre del comitente."
+        )
     archivo = st.file_uploader(f"Plantilla ({ayuda_plantilla})", type=["xlsx", "xls"])
 
     if st.button("Cargar Solicitud", type="primary"):
@@ -57,7 +60,7 @@ def render(usuario: dict):
 
             if tipo == "ODC":
                 diferencias = detectar_diferencias_costo(items)
-                grupos = agrupar_por_marca(items)
+                grupos = agrupar_por_marca(items, comitente)
                 solicitud_ids = []
                 for marca, items_marca in grupos.items():
                     solicitud_id = crear_solicitud(

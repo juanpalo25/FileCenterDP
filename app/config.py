@@ -5,6 +5,9 @@ DB_PATH = ROOT_DIR / "db" / "filecenterdp.db"
 MAESTRO_DP_PATH = ROOT_DIR / "MaestroDP.xlsx"
 
 TIPOS_SOLICITUD = ["ODC", "ODR", "CDP", "FDP"]
+
+# Diferencias de costo (ODC vs MaestroDP) menores a este monto se consideran redondeo y no se alertan
+UMBRAL_DIFERENCIA_COSTO = 1.0
 PRIORIDADES = ["alta", "media", "baja"]
 ORDEN_PRIORIDAD = {"alta": 0, "media": 1, "baja": 2}
 ROLES = ["analista", "asistente", "administrador"]

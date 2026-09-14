@@ -1,5 +1,23 @@
 # Bitácora del proyecto FileCenterDP
 
+## 2026-09-14 — Tolerancia de centavos en alerta de diferencia de costo (ODC)
+
+- `detectar_diferencias_costo` ya no alerta diferencias de costo menores a $1 entre `Costo_actualizado` y el `Costo Ppal` de MaestroDP (antes marcaba cualquier diferencia, incluso de centavos). Umbral configurable en `config.UMBRAL_DIFERENCIA_COSTO`.
+- No afecta la columna "DIF vs Maestro" que ve el asistente en la previsualización (`views_asistente.py`) — esa sigue mostrando el valor exacto de la diferencia; el cambio es solo sobre la alerta que dispara al cargar la ODC.
+
+## 2026-09-14 — Presupuesto mensual por rubro (PMC)
+
+- **Pestaña "PMC" en Administración** (solo administrador): permite cargar/editar en cualquier momento el presupuesto mensual de cada rubro (selector de mes, un campo numérico por rubro de MaestroDP). Tabla nueva `presupuestos_pmc` (rubro, período `YYYY-MM`, monto asignado) — cada mes arranca en $0 si no se cargó nada, sin arrastre del mes anterior.
+- **Descuento automático**: el "consumido" de cada rubro se calcula en vivo como la suma de `cantidad × costo_actualizado` de los ítems de las ODC en estado *Emitido* cuyo mes de emisión coincide con el período — no se persiste, se recalcula siempre desde `solicitudes`/`solicitud_items`. Si una ODC se anula o hay que corregir algo, el administrador ajusta a mano el monto asignado (no hay lógica de reversión automática, fue decisión explícita del usuario porque el sistema hoy no anula solicitudes).
+- **Sección "Presupuesto PMC" en el Dashboard**: visible para todos los roles que ya ven esa pantalla (analista, asistente, administrador). Muestra Presupuesto / Consumido / Saldo por rubro para el mes elegido, con el saldo en rojo si queda negativo.
+- Nuevo módulo `presupuestos.py` con la lógica (`establecer_presupuesto`, `obtener_presupuestos`, `calcular_consumido`, `resumen_pmc`, manejo de períodos).
+- Verificado de punta a punta en el navegador con un usuario administrador de prueba: carga de presupuesto por rubro, ODC emitida ficticia del mes en curso reflejada como consumido y saldo negativo en rojo. Se usó la base real (no una copia) porque el cambio de esquema es aditivo (`CREATE TABLE IF NOT EXISTS`); se limpiaron el usuario, la solicitud y los presupuestos de prueba al terminar.
+
+## 2026-09-14 — Marca opcional en ODC
+
+- **Marca vacía permitida en ODC**: `parsear_plantilla` ya no rechaza la plantilla si la columna `Marca` viene sin valor en algún renglón (sigue exigiendo que la columna exista como encabezado). `agrupar_por_marca` ahora recibe el comitente y agrupa los renglones sin marca en una única solicitud aparte, nombrada con el comitente en vez de una marca — el resto de los renglones sigue agrupándose por marca como antes.
+- Verificado con un caso aislado (`parsear_plantilla` + `agrupar_por_marca` sobre un Excel armado con filas con y sin `Marca`): los renglones con marca se agrupan por marca y los que vienen vacíos caen todos juntos bajo el nombre del comitente.
+
 ## 2026-08-27 — Mejoras a partir del uso real
 
 Ajustes pedidos por el usuario tras empezar a usar el MVP:

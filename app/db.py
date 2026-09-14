@@ -67,6 +67,16 @@ CREATE TABLE IF NOT EXISTS maestros_meta (
     ultima_carga TEXT,
     filas INTEGER
 );
+
+CREATE TABLE IF NOT EXISTS presupuestos_pmc (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    rubro TEXT NOT NULL,
+    periodo TEXT NOT NULL,
+    monto_asignado NUMERIC NOT NULL DEFAULT 0,
+    actualizado_por TEXT,
+    fecha_actualizacion TEXT,
+    UNIQUE(rubro, periodo)
+);
 """
 
 
