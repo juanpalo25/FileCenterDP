@@ -22,13 +22,14 @@ def nombre_archivo(tipo: str, comitente: str, solicitud_id: int, extension: str,
 
 def _campo(valor, ancho: int, decimales: int = 0) -> str:
     """Formatea un valor numérico justificado a la derecha en un campo de ancho fijo.
-    Si valor es None, devuelve el campo en blanco (mismo ancho)."""
+    Si valor es None, devuelve el campo en blanco (mismo ancho). Un campo sin
+    decimales redondea al entero más cercano en vez de truncar (5.9 -> 6, no 5)."""
     if valor is None:
         return " " * ancho
     if decimales:
         texto = f"{float(valor):.{decimales}f}"
     else:
-        texto = str(int(valor))
+        texto = str(round(float(valor)))
     return texto.rjust(ancho)
 
 

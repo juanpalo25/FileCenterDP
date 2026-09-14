@@ -12,6 +12,17 @@ class PlantillaInvalida(Exception):
     pass
 
 
+def _numero(valor, campo: str, sku) -> float | None:
+    """Convierte un valor de celda a número, o lo deja en None si vino vacío.
+    Rechaza la plantilla si el valor está presente pero no es numérico."""
+    if valor is None:
+        return None
+    try:
+        return float(valor)
+    except (TypeError, ValueError):
+        raise PlantillaInvalida(f"{campo} inválido para el SKU {sku}: {valor!r}")
+
+
 _COLUMNAS_REQUERIDAS = {
     "ODC": ["Marca", "SKU", "Cantidad", "Costo_actualizado"],
     "ODR": ["SKU", "Cantidad"],
@@ -55,24 +66,24 @@ def parsear_plantilla(tipo: str, archivo_bytes: bytes) -> list[dict]:
         item = {"sku": sku}
         if tipo == "ODC":
             marca = row[idx["Marca"]]
-            cantidad = row[idx["Cantidad"]]
-            costo_actualizado = row[idx["Costo_actualizado"]]
+            cantidad = _numero(row[idx["Cantidad"]], "Cantidad", sku)
+            costo_actualizado = _numero(row[idx["Costo_actualizado"]], "Costo_actualizado", sku)
             if cantidad is None:
                 raise PlantillaInvalida(f"Falta Cantidad para el SKU {sku}")
             item["marca"] = str(marca).strip() if marca is not None and str(marca).strip() != "" else None
             item["cantidad"] = cantidad
             item["costo_actualizado"] = costo_actualizado
         elif tipo == "ODR":
-            cantidad = row[idx["Cantidad"]]
+            cantidad = _numero(row[idx["Cantidad"]], "Cantidad", sku)
             if cantidad is None:
                 raise PlantillaInvalida(f"Falta Cantidad para el SKU {sku}")
             item["cantidad"] = cantidad
         elif tipo == "CDP":
-            pvp = row[idx["PVP"]]
+            pvp = _numero(row[idx["PVP"]], "PVP", sku)
             if pvp is None:
                 raise PlantillaInvalida(f"Falta PVP para el SKU {sku}")
             item["pvp"] = pvp
-            item["costo"] = row[idx["Costo"]]
+            item["costo"] = _numero(row[idx["Costo"]], "Costo", sku)
         items.append(item)
 
     if not items:

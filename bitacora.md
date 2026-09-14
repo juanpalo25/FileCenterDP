@@ -1,5 +1,18 @@
 # Bitácora del proyecto FileCenterDP
 
+## 2026-09-14 — Revisión de usabilidad/robustez y primera ronda de correcciones
+
+Se hizo una revisión de punta a punta de la app (lectura de todo `app/`, pruebas aisladas de casos borde y una recorrida en vivo en el navegador contra la base real, sin modificar datos) y se armó un reporte de 17 hallazgos ordenados por gravedad. El detalle completo del reporte quedó en esta conversación; lo accionable pendiente está en [docs/PENDIENTE.md](docs/PENDIENTE.md) → "Mejoras de la revisión de usabilidad (2026-09-14)".
+
+Con el usuario se acordó: dejar para una ronda aparte el hallazgo más grande (no se puede anular/editar una solicitud ya cargada — necesita estado nuevo, permisos y definir el impacto en el presupuesto PMC), confirmar que FDP debe seguir restringido a `.xlsx`/`.xls` (no era un bug, era intencional), y resolver ahora los siguientes 4 puntos:
+
+- **Validación numérica en la plantilla**: si `Cantidad` (ODC/ODR), `Costo_actualizado` (ODC), `PVP` o `Costo` (CDP) vienen con un valor no numérico, `parsear_plantilla` ahora rechaza toda la plantilla con un mensaje claro (columna + SKU afectado) en vez de dejarlo pasar y romper más tarde con un traceback crudo — antes esto explotaba en el momento de cargar (ODC) o recién al descargar el `.prn` días después (ODR/CDP), en la persona equivocada. Nueva función `_numero()` en `solicitudes.py`.
+- **Redondeo en vez de truncado en el `.prn`**: `_campo()` en `generators.py` usaba `int(valor)` para los campos sin decimales (Cantidad, PVP), truncando en silencio (5,9 → "5"). El usuario confirmó que los decimales son válidos en esos campos, así que ahora se redondea correctamente (`round(float(valor))`, 5,9 → "6"). Re-verificado byte a byte contra los 3 `.prn` reales de `Ejemplos/` — idéntico, porque los datos reales ya eran enteros.
+- **Confirmación antes de borrar un usuario**: en Administración → Usuarios, "Eliminar" ya no borra al instante — ahora pide confirmar ("¿Confirmás eliminar a X? Esta acción no se puede deshacer." con botones "Sí, eliminar" / "Cancelar"). Antes un solo click borraba la cuenta para siempre, sin backup ni forma de recuperar la contraseña.
+- **Anti-duplicado en "Cargar solicitud"**: el `file_uploader` se resetea (via una key dinámica en `session_state`) después de cada carga exitosa, así el archivo no queda "cargado" en pantalla invitando a un doble click o un reenvío accidental que generaría una solicitud duplicada. Los mensajes de éxito/alerta se guardan en `session_state` y se muestran después del `st.rerun()`.
+
+Verificado: pruebas aisladas de los 3 casos de valor no numérico (ahora rechazan con mensaje claro), prueba de redondeo, re-verificación byte a byte de los `.prn`, y en el navegador (con usuarios de prueba creados y borrados al terminar, sin tocar la base real): el flujo completo de confirmar/cancelar/eliminar un usuario, y que la pantalla de carga sigue funcionando igual que antes.
+
 ## 2026-09-14 — Tolerancia de centavos en alerta de diferencia de costo (ODC)
 
 - `detectar_diferencias_costo` ya no alerta diferencias de costo menores a $1 entre `Costo_actualizado` y el `Costo Ppal` de MaestroDP (antes marcaba cualquier diferencia, incluso de centavos). Umbral configurable en `config.UMBRAL_DIFERENCIA_COSTO`.

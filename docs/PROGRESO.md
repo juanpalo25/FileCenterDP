@@ -1,8 +1,8 @@
 # Progreso — FileCenterDP
 
-> Última actualización: 2026-08-24. Ver el plan original en [PLAN_EJECUCION.md](PLAN_EJECUCION.md) y el detalle técnico en [DOCUMENTACION.md](DOCUMENTACION.md). Lo que sigue abierto está en [PENDIENTE.md](PENDIENTE.md).
+> Última actualización: 2026-09-14. Ver el plan original en [PLAN_EJECUCION.md](PLAN_EJECUCION.md) y el detalle técnico en [DOCUMENTACION.md](DOCUMENTACION.md). Lo que sigue abierto está en [PENDIENTE.md](PENDIENTE.md). El detalle cronológico de cada cambio está en [bitacora.md](../bitacora.md).
 
-## Estado general: MVP local construido y probado ✅ — falta la entrega/capacitación real (Fase 5) y todo lo posterior al MVP
+## Estado general: MVP local construido y probado ✅, con mejoras post-MVP incorporadas a partir del uso real (ver más abajo) — falta la entrega/capacitación real (Fase 5) y todo lo posterior al MVP
 
 ## Avance por fase del plan
 
@@ -30,6 +30,24 @@
 - [x] Pruebas end-to-end de los 4 tipos de solicitud (backend y navegador real)
 - [x] Bitácora del proyecto (`bitacora.md`, punto 10 del brief)
 - [x] Documentación completa (esta carpeta `docs/`)
+
+## Cambios posteriores al MVP inicial (post 2026-08-24)
+
+El MVP se usó y, a partir de ese uso real, se le agregaron mejoras que no estaban en el plan original. Detalle día a día en [bitacora.md](../bitacora.md); resumen:
+
+**2026-08-27:**
+- ODC dividida en una solicitud por marca (columna `Marca` agregada a la plantilla).
+- Alerta de diferencia de costo pasó a no bloquear la carga.
+- SKU sin separador de miles en las previsualizaciones.
+- Se eliminó por completo la funcionalidad PMC original (archivo `PMC.xlsx` cruzando `MaestroPMC.xlsx` + MaestroDP) — decisión del usuario, ya no se usa `MaestroPMC.xlsx`.
+- Botón de Descarga Masiva (un `.zip` con todas las pendientes).
+- Orden por prioridad en la lista de pendientes.
+- Detalle de ítems de ODC ampliado (costo/PVP en vivo contra MaestroDP, diferencia coloreada).
+
+**2026-09-14:**
+- La columna `Marca` de ODC pasó a ser opcional: los renglones sin marca se agrupan en una solicitud aparte a nombre del comitente.
+- Nueva pestaña **PMC** en Administración: presupuesto mensual por rubro, cargado a mano, descontado en vivo con las ODC Emitidas del mes y visible en el Dashboard (saldo en rojo si es negativo). Sin relación con el PMC original eliminado en agosto — mismo nombre, concepto distinto.
+- La alerta de diferencia de costo en ODC dejó de marcar diferencias menores a $1 (redondeo/centavos).
 
 ## Qué falta para considerar el proyecto "cerrado" según el brief
 

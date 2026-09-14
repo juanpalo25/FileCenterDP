@@ -37,10 +37,24 @@ def render(usuario: dict):
             col1.write(u["nombre"])
             col2.write(u["usuario"])
             col3.write(u["rol"])
-            if u["usuario"] != usuario["usuario"]:
-                if col4.button("Eliminar", key=f"del_{u['id']}"):
+            if u["usuario"] == usuario["usuario"]:
+                continue
+            if st.session_state.get("confirmar_baja_usuario") == u["id"]:
+                st.warning(
+                    f"¿Confirmás eliminar a **{u['nombre']}** ({u['usuario']})? "
+                    "Esta acción no se puede deshacer."
+                )
+                col_si, col_no = st.columns(2)
+                if col_si.button("Sí, eliminar", key=f"confirmar_del_{u['id']}", type="primary"):
                     eliminar_usuario(u["id"])
+                    st.session_state.pop("confirmar_baja_usuario", None)
                     st.rerun()
+                if col_no.button("Cancelar", key=f"cancelar_del_{u['id']}"):
+                    st.session_state.pop("confirmar_baja_usuario", None)
+                    st.rerun()
+            elif col4.button("Eliminar", key=f"del_{u['id']}"):
+                st.session_state["confirmar_baja_usuario"] = u["id"]
+                st.rerun()
 
     with tab_maestros:
         st.write(f"Ruta MaestroDP: `{MAESTRO_DP_PATH}`")

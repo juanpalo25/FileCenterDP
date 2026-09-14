@@ -17,6 +17,12 @@ from solicitudes import (
 def render(usuario: dict):
     st.header("Cargar solicitud")
 
+    if "mensaje_exito" in st.session_state:
+        st.success(st.session_state.pop("mensaje_exito"))
+    if "advertencia_costo" in st.session_state:
+        st.warning(st.session_state.pop("advertencia_costo"))
+    st.session_state.setdefault("uploader_key", 0)
+
     comitentes = listar_comitentes()
     rubros = listar_rubros()
     if not comitentes:
@@ -48,7 +54,11 @@ def render(usuario: dict):
             "Si la plantilla trae varias marcas, se crea una solicitud por cada una. "
             "Los renglones sin marca se agrupan en una solicitud aparte a nombre del comitente."
         )
-    archivo = st.file_uploader(f"Plantilla ({ayuda_plantilla})", type=["xlsx", "xls"])
+    archivo = st.file_uploader(
+        f"Plantilla ({ayuda_plantilla})",
+        type=["xlsx", "xls"],
+        key=f"plantilla_{st.session_state['uploader_key']}",
+    )
 
     if st.button("Cargar Solicitud", type="primary"):
         if archivo is None:
@@ -79,11 +89,11 @@ def render(usuario: dict):
                 resumen = ", ".join(
                     f"{format_solicitud_id(sid)} ({marca})" for sid, marca in solicitud_ids
                 )
-                st.success(f"Se cargaron {len(solicitud_ids)} solicitud(es): {resumen}.")
+                st.session_state["mensaje_exito"] = f"Se cargaron {len(solicitud_ids)} solicitud(es): {resumen}."
 
                 if diferencias:
                     skus = ", ".join(str(d["sku"]) for d in diferencias)
-                    st.warning(
+                    st.session_state["advertencia_costo"] = (
                         f"Los siguientes SKU presentan diferencia de costo versus MaestroDP: {skus}"
                     )
             else:
@@ -98,9 +108,12 @@ def render(usuario: dict):
                     creado_por=usuario["usuario"],
                     fecha_vigencia=fecha_vigencia.isoformat() if fecha_vigencia else None,
                 )
-                st.success(
+                st.session_state["mensaje_exito"] = (
                     f"Solicitud {format_solicitud_id(solicitud_id)} cargada correctamente. "
                     f"Estado: Cargado (pendiente)."
                 )
+
+            st.session_state["uploader_key"] += 1
+            st.rerun()
         except PlantillaInvalida as e:
             st.error(str(e))

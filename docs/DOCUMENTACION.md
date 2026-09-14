@@ -17,7 +17,7 @@ Una aplicación web local (Streamlit) que centraliza la carga, generación de ar
 "C:\Users\dp887\Desktop\FileCenterDP\.venv\Scripts\python.exe" -m streamlit run "C:\Users\dp887\Desktop\FileCenterDP\app\main.py"
 ```
 
-Se abre en `http://localhost:8501`. El primer usuario que se crea en la pantalla de login queda como **administrador** automáticamente. Desde el menú **Administración → Maestros** hay que cargar `MaestroDP.xlsx` y `MaestroPMC.xlsx` (botones "Actualizar MaestroDP" / "Actualizar MaestroPMC") antes de poder cargar solicitudes, porque de ahí salen los comitentes, rubros y costos.
+Se abre en `http://localhost:8501`. El primer usuario que se crea en la pantalla de login queda como **administrador** automáticamente. Desde el menú **Administración → Maestros (MaestroDP)** hay que cargar `MaestroDP.xlsx` (botón "Actualizar MaestroDP") antes de poder cargar solicitudes, porque de ahí salen los comitentes, rubros y costos.
 
 También hay un `.claude/launch.json` configurado (`C:\Users\dp887\.claude\launch.json`) para levantarla como preview desde Claude Code sin escribir el comando a mano.
 
@@ -32,13 +32,14 @@ FileCenterDP/
 │   ├── config.py           ← rutas, constantes (tipos, prioridades, estados)
 │   ├── db.py                ← esquema SQLite + conexión
 │   ├── auth.py              ← login, alta de usuarios, hash de contraseñas (bcrypt)
-│   ├── maestros.py         ← lee MaestroDP/MaestroPMC y los cachea en SQLite
+│   ├── maestros.py         ← lee MaestroDP y lo cachea en SQLite
 │   ├── solicitudes.py      ← parseo de plantillas, alta de solicitudes, cambio de estado
-│   ├── generators.py       ← generación de .prn / PMC.xlsx / paquete .zip de descarga
+│   ├── presupuestos.py     ← presupuesto mensual por rubro (PMC): alta, consumido, saldo
+│   ├── generators.py       ← generación de .prn / paquete .zip de descarga
 │   ├── views_analista.py   ← pantalla "Cargar solicitud"
 │   ├── views_asistente.py  ← pantalla "Pendientes / Descargar"
-│   ├── views_dashboard.py  ← pantalla "Dashboard"
-│   └── views_admin.py      ← pantalla "Administración" (usuarios + maestros)
+│   ├── views_dashboard.py  ← pantalla "Dashboard" (incluye sección de presupuesto PMC)
+│   └── views_admin.py      ← pantalla "Administración" (usuarios + maestros + PMC)
 ├── db/filecenterdp.db      ← base SQLite (se crea sola al arrancar)
 ├── docs/                   ← esta documentación
 ├── bitacora.md             ← registro de avances del proyecto
@@ -49,36 +50,37 @@ FileCenterDP/
 
 | Rol | Puede |
 |---|---|
-| Analista | Cargar solicitud, ver Dashboard |
-| Asistente | Ver Pendientes / Descargar, ver Dashboard |
-| Administrador | Todo lo anterior + Administración (usuarios y maestros) |
+| Analista | Cargar solicitud, ver Dashboard (incluida la sección de presupuesto PMC) |
+| Asistente | Ver Pendientes / Descargar, ver Dashboard (incluida la sección de presupuesto PMC) |
+| Administrador | Todo lo anterior + Administración (usuarios, maestros y **PMC** — carga del presupuesto mensual por rubro) |
 
 ## Modelo de datos (SQLite, `db/filecenterdp.db`)
 
 - **usuarios**: nombre, usuario, rol, password_hash
-- **solicitudes**: id (correlativo global #0001, #0002…), tipo, comitente, rubro, marca (solo ODC — ver "Solicitudes ODC por marca" más abajo), prioridad, fecha_vigencia (solo CDP), estado, fecha_creacion, fecha_emision, referencia_externa, archivo_origen_nombre, archivo_origen_datos (el Excel subido, guardado tal cual), creado_por, actualizado_por
+- **solicitudes**: id (correlativo global #0001, #0002…), tipo, comitente, rubro, marca (solo ODC, puede ser `NULL` — ver "Solicitudes ODC por marca" más abajo), prioridad, fecha_vigencia (solo CDP), estado, fecha_creacion, fecha_emision, referencia_externa, archivo_origen_nombre, archivo_origen_datos (el Excel subido, guardado tal cual), creado_por, actualizado_por
 - **solicitud_items**: sku, cantidad, costo_actualizado, costo_maestro (snapshot al momento de cargar, para el historial de la alerta), pvp, costo
 - **historial_estados**: cada cambio de estado con fecha y usuario — es lo que alimenta la trazabilidad del dashboard
 - **maestro_dp_cache**: copia de MaestroDP.xlsx en SQLite, para no leer el archivo entero en cada pantalla
 - **maestros_meta**: cuándo fue la última carga del maestro y cuántas filas trajo
+- **presupuestos_pmc**: rubro, período (`YYYY-MM`), monto_asignado, quién y cuándo lo actualizó por última vez — un registro por rubro y mes (`UNIQUE(rubro, periodo)`). Ver "Presupuesto mensual por rubro (PMC)" más abajo.
 
 ## Flujo por tipo de solicitud
 
 ### 1. Analista carga la solicitud
-Elige tipo → comitente y rubro se autocompletan desde MaestroDP (no se tipean a mano) → prioridad → sube la plantilla Excel. El sistema valida que estén las columnas obligatorias:
-- ODC: `Marca`, `SKU`, `Cantidad`, `Costo_actualizado`
+Elige tipo → comitente y rubro se autocompletan desde MaestroDP (no se tipean a mano) → prioridad → sube la plantilla Excel. El sistema valida que estén las columnas obligatorias (como encabezado; algunas pueden venir con celdas vacías, ver detalle):
+- ODC: `Marca` (puede venir vacía por renglón), `SKU`, `Cantidad`, `Costo_actualizado`
 - ODR: `SKU`, `Cantidad`
 - CDP: `SKU`, `PVP`, `Costo` (Costo puede venir vacío)
 - FDP: no tiene columnas fijas, se acepta el archivo tal cual
 
-Si falta una columna obligatoria o un dato requerido, se corta la carga con un mensaje de error específico (no se guarda nada a medias).
+Si falta una columna obligatoria (como encabezado) o un dato requerido en una celda (SKU, Cantidad en ODC/ODR, PVP en CDP), se corta la carga con un mensaje de error específico (no se guarda nada a medias).
 
-Para ODC, además se compara el `Costo_actualizado` de la plantilla contra el `Costo Ppal` de MaestroDP por cada SKU al momento de confirmar la carga; si hay diferencias, se muestra una leyenda de alerta con los SKU afectados — **no bloquea la carga**, es solo para que el asistente las revise antes de emitir la orden.
+Para ODC, además se compara el `Costo_actualizado` de la plantilla contra el `Costo Ppal` de MaestroDP por cada SKU al momento de confirmar la carga; si la diferencia es de **$1 o más** (`config.UMBRAL_DIFERENCIA_COSTO`), se muestra una leyenda de alerta con los SKU afectados — diferencias menores (redondeo/centavos) no se muestran — y en ningún caso **bloquea la carga**, es solo para que el asistente las revise antes de emitir la orden.
 
 Al confirmar, el sistema asigna el número de solicitud (correlativo, único entre los 4 tipos) y queda en estado **Cargado (pendiente)**.
 
 #### Solicitudes ODC por marca
-La plantilla de ODC trae una columna `Marca` por SKU. Al cargar, el sistema agrupa los ítems por marca y **crea una solicitud independiente por cada marca** (cada una con su propio número correlativo), aunque el analista haya subido un solo archivo con varias marcas mezcladas. El mensaje de confirmación lista todos los números de solicitud creados. La comparación de costo contra MaestroDP se hace una sola vez sobre el archivo completo, antes de repartir los ítems entre las solicitudes.
+La plantilla de ODC trae una columna `Marca` por SKU (el encabezado es obligatorio, pero la celda puede venir vacía). Al cargar, el sistema agrupa los ítems por marca y **crea una solicitud independiente por cada marca** (cada una con su propio número correlativo), aunque el analista haya subido un solo archivo con varias marcas mezcladas. Los renglones sin marca se agrupan aparte, en una única solicitud **nombrada con el Comitente** en vez de una marca (decisión del usuario, 2026-09-14, para comitentes que no manejan varias marcas). El mensaje de confirmación lista todos los números de solicitud creados. La comparación de costo contra MaestroDP se hace una sola vez sobre el archivo completo, antes de repartir los ítems entre las solicitudes.
 
 ### 2. Asistente descarga los archivos
 En "Pendientes / Descargar" aparecen las solicitudes pendientes, ordenadas por prioridad (alta primero) y luego por más recientes. Arriba de la lista hay un botón **"Descarga Masiva"** que arma un único `.zip` con el archivo de cada solicitud pendiente (mismo criterio de nombre y contenido que la descarga individual).
@@ -117,7 +119,23 @@ Para ODR y CDP la tabla es la simple de siempre (SKU sin comas + sus columnas pr
 Una vez emitida la orden / aplicado el cambio en el sistema comercial, el asistente carga el número que le devolvió ese sistema (Nro. de OC / OR / Lote). El estado pasa a **Emitido** (ODC/ODR) o **Aplicado** (CDP/FDP), con la fecha, y queda registrado en el historial.
 
 ### 4. Dashboard
-Filtros por tipo, comitente, rubro, prioridad y estado. Indicadores (total, pendientes, emitidas, aplicadas). Selección de una solicitud puntual para ver toda su trazabilidad (quién la cargó, cuándo, cuándo se emitió/aplicó y con qué referencia).
+Sección de presupuesto PMC (ver más abajo) arriba de todo, luego filtros por tipo, comitente, rubro, prioridad y estado. Indicadores (total, pendientes, emitidas, aplicadas). Selección de una solicitud puntual para ver toda su trazabilidad (quién la cargó, cuándo, cuándo se emitió/aplicó y con qué referencia).
+
+## Presupuesto mensual por rubro (PMC)
+
+> No confundir con el "PMC" original del brief (cruce MaestroPMC + MaestroDP para generar `PMC.xlsx` por ODC) — ese se eliminó por completo el 2026-08-27. Esta es una función nueva y no relacionada, agregada el 2026-09-14 a pedido del usuario, que reutiliza la misma sigla ("Presupuesto Mensual por rubro / Comercial").
+
+**Qué es:** un presupuesto en pesos por rubro y por mes, cargado manualmente por un administrador, que se va descontando a medida que se emiten ODC de ese rubro. Sirve como control visual — no bloquea ninguna carga ni emisión.
+
+**Carga (Administración → PMC, solo administrador):** se elige un mes (por defecto el actual; hay meses anteriores y siguientes disponibles para corregir o precargar) y se ingresa un monto por cada rubro de MaestroDP. El monto se puede modificar **en cualquier momento**, incluso para meses ya transcurridos — es la forma prevista de corregir el presupuesto a mano (por ejemplo, si se anula una ODC que ya había descontado, o si hubo un error de carga). No hay un botón separado de "ajuste": se edita directamente el monto asignado.
+
+**Consumido (cálculo, no se guarda):** para un rubro y mes dados, es la suma de `cantidad × costo_actualizado` de todos los ítems de las ODC de ese rubro que están en estado **Emitido**, agrupadas por el mes de `fecha_emision` (no el mes de carga). Se recalcula en vivo cada vez que se muestra — no hay ninguna tabla que acumule esto, así que siempre refleja el estado actual de `solicitudes`/`solicitud_items`.
+
+**Saldo:** `monto_asignado − consumido`. Se muestra en rojo cuando es negativo.
+
+**Meses sin presupuesto cargado:** quedan en $0 — no hay arrastre del saldo no usado de un mes al siguiente (decisión explícita del usuario).
+
+**Dónde se ve:** además de la pestaña de carga, hay una sección "Presupuesto PMC" arriba del Dashboard, visible para los tres roles que acceden a esa pantalla (analista, asistente, administrador), con un selector de mes independiente del de la pestaña de Administración.
 
 ## Decisiones de diseño relevantes
 
@@ -129,6 +147,9 @@ Filtros por tipo, comitente, rubro, prioridad y estado. Indicadores (total, pend
 - **ODC dividida por marca al cargar, no al descargar**: se decidió repartir los ítems en solicitudes separadas ya en el momento de la carga (una por marca), en vez de guardar una sola solicitud multi-marca y separarla recién al generar el `.prn` — así cada solicitud tiene su propio número, estado y trazabilidad independientes.
 - **Nombre de archivo sin la marca**: aunque cada solicitud ODC ahora es de una sola marca, el nombre de archivo de salida no la incluye — se mantiene el formato `TIPO Comitente #Solicitud Fecha.ext` ya calibrado contra el sistema comercial, para no arriesgar que deje de reconocerlo.
 - **Costo/PVP del detalle de ODC son en vivo, no snapshot**: la tabla de previsualización de una solicitud pendiente consulta MaestroDP en el momento (no el valor guardado cuando se cargó la solicitud), porque el maestro puede haberse actualizado entre la carga y la revisión del asistente. El `costo_maestro` que sí queda guardado en `solicitud_items` es el snapshot histórico usado para la alerta de diferencias en el momento de la carga.
+- **Marca opcional en ODC, agrupada por comitente si falta**: se evaluó bloquear la carga si faltaba la marca (comportamiento original), pero el usuario pidió (2026-09-14) permitirlo para comitentes que no manejan varias marcas — esos renglones quedan en una solicitud aparte identificada con el nombre del comitente en vez de una marca.
+- **Tolerancia de $1 en la alerta de costo**: la comparación contra MaestroDP marcaba cualquier diferencia, incluidas de centavos por redondeo, generando alertas sin valor real. El usuario pidió (2026-09-14) ignorar diferencias menores a $1; el umbral vive en `config.UMBRAL_DIFERENCIA_COSTO` para poder ajustarlo si hace falta.
+- **PMC (presupuesto) es informativo, sin lógica de reversión automática**: el usuario prefirió simplicidad — si una ODC se anula o hay que corregir el consumido, el administrador ajusta a mano el monto asignado del rubro/mes en vez de que el sistema intente revertir automáticamente (hoy tampoco existe un flujo de anulación de solicitudes). Es deliberadamente "más visual que contable".
 
 ## Cómo se probó
 
@@ -136,3 +157,4 @@ Filtros por tipo, comitente, rubro, prioridad y estado. Indicadores (total, pend
 - Se probó el flujo completo (login, carga de maestros, carga de solicitud, descarga, actualización de estado, dashboard) contra la aplicación corriendo en el navegador.
 - Se probaron los 4 tipos de solicitud de punta a punta, incluyendo el caso de costo vacío en CDP y la numeración correlativa cruzando tipos.
 - (2026-08-27) Se probó el split de ODC por marca, la migración de esquema (columna `marca` agregada a una base ya existente), la generación de archivos sin PMC, el `.zip` de Descarga Masiva y el orden por prioridad, todo contra una copia de trabajo de los datos reales y limpiando los registros de prueba después.
+- (2026-09-14) Se probó de punta a punta en el navegador, contra la base real, el presupuesto PMC: carga de presupuesto por rubro, una ODC "Emitida" ficticia reflejada como consumido y el saldo en rojo al quedar negativo. Se probó por separado (aislado, sin UI) el agrupamiento por comitente de renglones ODC sin marca y la tolerancia de $1 en la alerta de costo. En todos los casos se limpiaron los registros/usuarios de prueba creados en la base real al terminar.
